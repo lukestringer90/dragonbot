@@ -1,0 +1,15 @@
+{
+  "name": "dragonbot",
+  "description": "Private bot for Dragon Cave's unofficial Discord: https://discord.gg/pXqe2zN",
+  "version": "1.0-alpha",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "github:hydrabolt/discord.js",
+  },
+  "engines": {
+    "node": "8.9.3"
+  }
+}
