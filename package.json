@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "discord.js": "github:hydrabolt/discord.js",
+    "node-schedule": "^1.2.5"
   },
   "engines": {
     "node": "8.9.3"
