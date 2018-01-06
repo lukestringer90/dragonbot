@@ -334,27 +334,28 @@ bot.on("message", message => {
                         if (info[author.id].pending.scroll != null) {
                             send("You already have a scroll change request pending!");
                             return;
+                        } else {
+                            //Edit request
+                            (getChannel(private.channel.request)).send(new Discord.MessageEmbed().setColor(0x42dcf4)
+                                .setAuthor(author.username+"#"+author.discriminator, private.icon)
+                                .addField("Scroll change", "Old: ["+(info[author.id]).scroll+"](https://dragcave.net/user/"+link((info[author.id]).scroll)+")"
+                                    +n+"New: ["+args+"](https://dragcave.net/user/"+link(args)+")")
+                            ).then(newmessage => {
+                                yesno(newmessage);
+                                requests[newmessage.id] = {
+                                    "name": author.username+"#"+author.discriminator,
+                                    "user": author.id,
+                                    "type": "scroll",
+                                    "data": args
+                                };
+                                write(requests, "./requests.json");
+                                info[author.id].pending.scroll = newmessage.id;
+                                write(info, "./info.json");
+                                log(message, "sent an update request for their scroll.\nOld: "+info[author.id].scroll+"\nNew: "+args);
+                                setTimeout(()=>{message.delete()}, 100);
+                                send(":thumbsup: Your new scroll name will be updated after it is approved by moderators.");
+                            });
                         };
-                        //Edit request
-                        (getChannel(private.channel.request)).send(new Discord.MessageEmbed().setColor(0x42dcf4)
-                            .setAuthor(author.username+"#"+author.discriminator, private.icon)
-                            .addField("Scroll change", "Old: ["+(info[author.id]).scroll+"](https://dragcave.net/user/"+link((info[author.id]).scroll)+")"
-                                +n+"New: ["+args+"](https://dragcave.net/user/"+link(args)+")")
-                        ).then(newmessage => {
-                            yesno(newmessage);
-                            requests[newmessage.id] = {
-                                "name": author.username+"#"+author.discriminator,
-                                "user": author.id,
-                                "type": "scroll",
-                                "data": args
-                            };
-                            write(requests, "./requests.json");
-                            info[author.id].pending.scroll = newmessage.id;
-                            write(info, "./info.json");
-                            log(message, "sent an update request for their scroll.\nOld: "+info[author.id].scroll+"\nNew: "+args);
-                            setTimeout(()=>{message.delete()}, 100);
-                            send(":thumbsup: Your new scroll name will be updated after it is approved by moderators.");
-                        });
                     };
                 };
             };
