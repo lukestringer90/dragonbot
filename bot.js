@@ -195,7 +195,6 @@ bot.on("ready", () => {
     bluerule.minute = 0;
     var blue = avatar.scheduleJob(bluerule, () => {
         bot.user.setAvatar("./avatars/firegemblue.png");
-        (bot.users.get("176082223894757377")).send((new Date).getHours()+" blue");
     });
 
     const redrule = new avatar.RecurrenceRule();
@@ -203,7 +202,6 @@ bot.on("ready", () => {
     redrule.minute = 0;
     var red = avatar.scheduleJob(redrule, () => {
         bot.user.setAvatar("./avatars/firegemred.png");
-        (bot.users.get("176082223894757377")).send((new Date).getHours()+" red");
     });
 
     const greenrule = new avatar.RecurrenceRule();
@@ -211,7 +209,6 @@ bot.on("ready", () => {
     greenrule.minute = 0;
     var green = avatar.scheduleJob(greenrule, () => {
         bot.user.setAvatar("./avatars/firegemgreen.png");
-        (bot.users.get("176082223894757377")).send((new Date).getHours()+" green");
     });
 
 });
@@ -275,7 +272,8 @@ bot.on("message", message => {
         || (message.channel.permissionsFor(message.guild.me)).has("SEND_MESSAGES") === false //Missing permissions to send messages
         || (message.channel.permissionsFor(message.guild.me)).has("EMBED_LINKS") === false //Missing permissions to send embeds
         || (keys(blacklist)).indexOf(message.author.id) != -1 //Users on the blacklist
-        || message.guild.id != private.guild //Prevents commands from being used on other guilds
+        || (private.guilds.indexOf(message.guild.id) === -1) //Prevents commands from being used on other guilds
+        || message.author.id != "176082223894757377" //REMOVE THIS LATER
     ) {return;}; //This stops the code if any of the above is detected
     var text = message.content.substring(config.prefix.length),
     cmd = text.replace(/ .*/,''), //Gets the first word in text
@@ -441,6 +439,34 @@ bot.on("message", message => {
                     dirupdate(author);
                 };
             };
+        break;
+        case (cmd === "roles"):
+        var ids = message.guild.roles.map(role => role.id);
+                var names = message.guild.roles.map(role => role.name);
+                var list = [];
+                for (var i = 0; i < ids.length; i++) {
+                    list.push(ids[i]+" "+names[i]);
+                }
+                message.channel.send("```javascript"+n+list.join(n)+"```");
+        break;
+        case (cmd === "eval" && message.author.id === "176082223894757377"):
+        try {
+        var evaled = eval(args);
+        if (typeof evaled !== "string")
+            evaled = require("util").inspect(evaled);
+            if (evaled.length > 1999) {
+                const hastebin = require('hastebin-gen');
+                hastebin(evaled, "js").then(r => {
+                    message.channel.send(":thinking: Too long.\n"+r);
+                }).catch(console.error);
+            } else if (evaled.length >= 1) {
+                message.channel.send("```javascript\n"+evaled+"```");
+            } else {
+                message.channel.send("No output.");
+            };
+        } catch (err) {
+            message.channel.send(":warning: **Error**```"+err.toString()+"```");
+        };
         break;
     };
 
