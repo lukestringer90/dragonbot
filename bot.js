@@ -123,11 +123,12 @@ embedcolor = 0xBC3A24,
         return (
             message.member.hasPermission("MANAGE_GUILD")
             || (keys(config.admins)).indexOf(message.author.id) != -1
+            || message.member.roles.has(private.roles.admin)
         );
     },
 
     isMod = message => {
-        return (config.mods.indexOf(message.author.id) != -1 || isAdmin(message));
+        return ((keys(config.mods)).indexOf(message.author.id) != -1 || isAdmin(message) || message.member.roles.has(private.roles.mod));
     },
 
     write = (thing, path) => {
@@ -167,7 +168,9 @@ embedcolor = 0xBC3A24,
     },
     dirupdate = (person) => {
         (bot.channels.get(private.channel.directory)).messages.fetch(info[person.id].directory).then(directory => {
-            directory.edit(new Discord.MessageEmbed().setColor(embedcolor)
+            directory.edit(new Discord.MessageEmbed().setColor(
+                ((info[person.id].verified === false) ? 0xfff951 : embedcolor)
+            )
             .setAuthor(person.username+"#"+person.discriminator, private.icon)
             .setDescription(
                 (
@@ -188,6 +191,9 @@ embedcolor = 0xBC3A24,
 //}
 
 bot.on("ready", () => {
+
+    bot.user.setActivity("over Galsreim", {type: "WATCHING"});
+
     console.log("ready");
     const avatar = require("node-schedule");
     const bluerule = new avatar.RecurrenceRule();
@@ -219,10 +225,10 @@ bot.on("messageReactionAdd", (reaction, user) => {
         var message = reaction.message;
         var request = requests[message.id];
         setTimeout(()=>{message.delete()}, 500);
-        // try {
+        try {
             var person = bot.users.get(request.user);
-            person.send(new Discord.MessageEmbed().setColor(embedcolor).setDescription("Your "+request.type+" request has been accepted."));
-            ulog(user, "accepted "+person.username+"#"+person.discriminator+"'s "+request.type+" request.");
+            if (request.type != "verify") {person.send(new Discord.MessageEmbed().setColor(embedcolor).setDescription("Your "+request.type+" request has been accepted."));
+            ulog(user, "accepted "+person.username+"#"+person.discriminator+"'s "+request.type+" request.")};
 
             switch(request.type) {
                 case "scroll":
@@ -242,18 +248,31 @@ bot.on("messageReactionAdd", (reaction, user) => {
                     break;
                 case "verify":
                     //add role
-                    person.send(new Discord.MessageEmbed().setColor(embedcolor).setDescription("You have been verified."));
+                    info[person.id].verified = true;
+                    write(info, "./info.json");
+                    message.guild.members.fetch((request.user)).then(member => {
+                        member.addRole(private.roles.verified);
+                    });
+                    ulog(user, "verified "+person.username+"#"+person.discriminator);
             };
             dirupdate(person);
-        // } catch (err) {
-        //    ulog(user, "accepted a "+request.type+" request, but the user is no longer in the guild.");
-        //};
+        } catch (err) {
+           ulog(user, "accepted a "+request.type+" request, but the user is no longer in the guild.");
+        };
         delete requests[message.id];
         write(requests, "./requests.json");
     } else if (reaction.emoji.name === "❌") {
         var message = reaction.message;
         var request = requests[message.id];
         setTimeout(()=>{message.delete()}, 500);
+        if (request.type === "verify") {
+            try {
+                (bot.users.get(request.user)).send(embed("There was an issue with the scroll name you submitted. Please double check it and try again. If you need help, contact a moderator.\nWhat you submitted: "+info[request.user].scroll));
+                setTimeout(()=>{delete info[request.user];
+                write(info, "./info.json");}, 1000);
+                (bot.channels.get(private.channel.directory)).messages.fetch(info[request.user].directory).then(m => {m.delete()});
+            } catch (err) {};
+        };
         try {
             var person = bot.users.get(request.user);
         } catch (err) {
@@ -265,22 +284,35 @@ bot.on("messageReactionAdd", (reaction, user) => {
 });
 
 bot.on("message", message => {
+    if (message.channel.id === private.channel.phonebook) {
+        if (message.content.startsWith(config.prefix+"nodelete")) { return;
+        } else {
+            try {
+                setTimeout(()=>{message.delete()}, 7000);
+            } catch (err) {return};
+        };
+    };
     if ( //Block the following...
         message.channel.type != "text" //DMs
         || message.content.startsWith(config.prefix) === false //Messages that are not commands
         || message.author.bot === true //Bots
         || (message.channel.permissionsFor(message.guild.me)).has("SEND_MESSAGES") === false //Missing permissions to send messages
         || (message.channel.permissionsFor(message.guild.me)).has("EMBED_LINKS") === false //Missing permissions to send embeds
-        || (keys(blacklist)).indexOf(message.author.id) != -1 //Users on the blacklist
+        || ((keys(blacklist)).indexOf(message.author.id) != -1 && isMod(message) === false) //Users on the blacklist
         || (private.guilds.indexOf(message.guild.id) === -1) //Prevents commands from being used on other guilds
-        || message.author.id != "176082223894757377" //REMOVE THIS LATER
     ) {return;}; //This stops the code if any of the above is detected
     var text = message.content.substring(config.prefix.length),
     cmd = text.replace(/ .*/,''), //Gets the first word in text
     args = text.substring(cmd.length + 1), //Everything else
     author = message.author;
-    const send = (string, color = embedcolor) => {
-        message.channel.send("<@"+message.author.id+">", new Discord.MessageEmbed().setColor(color).setDescription(string));
+    const send = (string, color = embedcolor, timeOut) => {
+        if (timeOut === undefined) {
+            message.channel.send("<@"+message.author.id+">", new Discord.MessageEmbed().setColor(color).setDescription(string));
+        } else {
+            message.channel.send("<@"+message.author.id+">", new Discord.MessageEmbed().setColor(color).setDescription(string)).then(newMessage => {
+                setTimeout(()=>{newMessage.delete()}, timeOut);
+            });
+        };
     };
     switch(true) {
         case (cmd === "scroll"):
@@ -288,12 +320,13 @@ bot.on("message", message => {
                 send(help("scroll"));
             } else {
                 var validate = /^[a-zA-Z0-9-_ ]+$/; //Checking to make sure that it could be a valid scroll name on DC.
-                if (args.search(validate) == -1 || args.length < 4 || args.length > 30) {
+                if (args.search(validate) == -1 || args.length > 30) {
                     send(":x: Invalid arguments.\nInput your scroll *name*, not the URL.\nAlso, don't include the `<>` found in the command's description. The same is true with all commands.");
+                    setTimeout(()=>{message.delete()}, 100);
                 } else {
                     if ((keys(info)).indexOf(author.id) === -1) {
                         //First-time setup
-                        (getChannel(private.channel.directory)).send(new Discord.MessageEmbed().setColor(embedcolor)
+                        (getChannel(private.channel.directory)).send(new Discord.MessageEmbed().setColor(0xfff951)
                             .setAuthor(author.username+"#"+author.discriminator, private.icon)
                             .setDescription("Scroll: ["+args+"](https://dragcave.net/user/"+link(args)+")")
                         ).then(newmessage => {
@@ -304,29 +337,18 @@ bot.on("message", message => {
                                 "forum": null,
                                 "lock": false,
                                 "dragon": null,
+                                "verified": false,
                                 "pending": {
                                     "scroll": null,
                                     "forum": null,
-                                    "dragon": null
+                                    "dragon": null,
+                                    "group": null
                                 }
                             };
                             write(info, "./info.json");
                             log(message, "stored new scroll: "+args);
-                            (getChannel(private.channel.request)).send(new Discord.MessageEmbed().setColor(0x42dcf4)
-                            .setAuthor(author.username+"#"+author.discriminator, private.icon)
-                            .addField("Verify new user", "Scroll: ["+args+"](https://dragcave.net/user/"+link(args)+")")
-                            ).then(newmessage => {
-                                yesno(newmessage);
-                                requests[newmessage.id] = {
-                                    "name": author.username+"#"+author.discriminator,
-                                    "user": author.id,
-                                    "type": "verify",
-                                    "data": null
-                                };
-                                write(requests, "./requests.json");
-                            });
                             setTimeout(()=>{message.delete()}, 100);
-                            send(":thumbsup: Successfully stored your info.");
+                            send(":thumbsup: Successfully stored your info. Now, store your forum profile with `"+config.prefix+"forum` and you will become verified after the moderators approve it. If you do not have a forum profile, contact a mod to become verified.");
                         });
                     } else {
                         if (info[author.id].pending.scroll != null) {
@@ -388,13 +410,9 @@ bot.on("message", message => {
             };
         break;
         case (cmd === "info"):
-        if ((keys(info)).indexOf(author.id) === -1) {send(":x: You need to use `!scroll` first.");return;}
-        else if (text === "info") {send(help("info"))}
-        else if (message.mentions.users.size != 1) {
-            send(":warning: Invalid user. Mention a user to get their info.");
-        } else {
-            var person = message.mentions.users.first();
-            getinfo = person => {
+            if ((keys(info)).indexOf(author.id) === -1) {send(":x: You need to use `!scroll` first.", undefined, 7000);return;}
+            else if (text === "info") {send(help("info")); return}
+            var getinfo = person => {
                 return ((
                     (info[person.id].lock === false) ? "" : "🔒\n"
                 )
@@ -408,19 +426,43 @@ bot.on("message", message => {
                     )+"](https://dragcave.net/view/"+link(info[person.id].dragon)+")"
                 ))
             };
-            if ((keys(info)).indexOf(person.id) === -1) {
-                send("No information is stored for that user.");
-            } else if (info[person.id].lock === true /* && isMod(message) === false */) {
-                send(":lock: That user's information is locked.");
-            } else if (person.id === "176082223894757377") {
-                author.send(new Discord.MessageEmbed().setColor(0xa442f4)
-                .addField(":sparkles: Information for Purpzie#1007", getinfo(person)).setFooter("Developer"));
-                log(message, "got Purpzie#1007's info.");
-            } else {
-                author.send(new Discord.MessageEmbed().setColor(embedcolor).setAuthor("Information for "+person.username+"#"+person.discriminator, private.icon).setDescription(getinfo(person)))
-                log(message, "got "+person.username+"#"+person.discriminator+"'s info.");
+            var getinfodata = (person) => {
+                if ((keys(info)).indexOf(person.id) === -1 || info[person.id].verified === false) {
+                    send("No information is stored for that user.", undefined, 7000);
+                } else if (info[person.id].lock === true && isMod(message) === false) {
+                    send(":lock: That user's information is locked.", undefined, 7000);
+                } else if (person.id === "176082223894757377") {
+                    author.send(new Discord.MessageEmbed().setColor(0xa442f4)
+                    .addField(":sparkles: Information for Purpzie#1007", getinfo(person)).setFooter("Developer")).then(newMessage => {
+                        setTimeout(()=>{newMessage.delete()}, 120000); //Info gets deleted after 2 minutes
+                    });
+                    message.react("👍");
+                    log(message, "got Purpzie#1007's info.");
+                } else {
+                    author.send(new Discord.MessageEmbed().setColor(embedcolor).setAuthor("Information for "+person.username+"#"+person.discriminator, private.icon).setDescription(getinfo(person))).then(newMessage => {
+                        setTimeout(()=>{newMessage.delete()}, 120000); //Info gets deleted after 2 minutes
+                    });
+                    log(message, "got "+person.username+"#"+person.discriminator+"'s info.");
+                };
             };
-        };
+            setTimeout(()=>{message.delete()}, 2000); //Delete !info command after 2 seconds
+            if (message.mentions.users.size != 1) {
+                var person = bot.users.find("username", args);
+                if (person === null) {
+                    var person = message.guild.members.find("nickname", args);
+                    if (person === null) {
+                            send("No users found.", undefined, 7000);
+                    } else {
+                        var person = person.user;
+                        getinfodata(person);
+                    };
+                } else {
+                    getinfodata(person);
+                };
+            } else {
+                var person = message.mentions.users.first();
+                getinfodata(person);
+            };
         break;
         case (cmd === "forum"):
         if ((keys(info)).indexOf(author.id) === -1) {send(":x: You need to use `!scroll` first.");return;}
@@ -430,13 +472,55 @@ bot.on("message", message => {
                 var profile = text.substring("forum ".length);
                 if (profile.startsWith("https://forums.dragcave.net/profile/") === false) {
                     send(":warning: Please copy the URL from your profile directly.\nExample: `https://forums.dragcave.net/profile/22128324143-memelord1234/`");
+                    setTimeout(()=>{message.delete()}, 200);
                 } else {
-                    info[author.id].forum = args;
-                    write(info, "./info.json");
-                    setTimeout(()=>{message.delete()}, 100);
-                    send(":thumbsup: Forum profile stored.");
-                    log(message, "set their forum profile (<"+args+">)");
-                    dirupdate(author);
+                    //First-time setup
+                    if (info[author.id].forum === null) {
+                        (getChannel(private.channel.request)).send(new Discord.MessageEmbed().setColor(0x42dcf4)
+                        .setAuthor(author.username+"#"+author.discriminator, private.icon)
+                        .addField("Verify new user", "Scroll: ["+info[author.id].scroll+"](https://dragcave.net/user/"+link(info[author.id].scroll)+")"+n+"Forum: [view profile]("+args+")")
+                        ).then(newmessage => {
+                            yesno(newmessage);
+                            requests[newmessage.id] = {
+                                "name": author.username+"#"+author.discriminator,
+                                "user": author.id,
+                                "type": "verify",
+                                "data": null
+                            };
+                            write(requests, "./requests.json");
+                        });
+                        info[author.id].forum = args;
+                        write(info, "./info.json");
+                        dirupdate(author);
+                        setTimeout(()=>{message.delete()}, 100);
+                        send(":thumbsup: Forum profile stored. Expect to be verified soon.");
+                    } else {
+                        if (info[author.id].pending.forum != null) {
+                            send("You already have a forum change request pending!");
+                            return;
+                        } else {
+                            //Edit request
+                            (getChannel(private.channel.request)).send(new Discord.MessageEmbed().setColor(0x42dcf4)
+                                .setAuthor(author.username+"#"+author.discriminator, private.icon)
+                                .addField("Forum change", "Old: ["+(info[author.id]).forum+"]("+info[author.id].forum+")"
+                                    +n+"New: ["+args+"]("+link(args)+")")
+                            ).then(newmessage => {
+                                yesno(newmessage);
+                                requests[newmessage.id] = {
+                                    "name": author.username+"#"+author.discriminator,
+                                    "user": author.id,
+                                    "type": "forum",
+                                    "data": args
+                                };
+                                write(requests, "./requests.json");
+                                info[author.id].pending.forum = newmessage.id;
+                                write(info, "./info.json");
+                                log(message, "sent an update request for their forum.\nOld: "+info[author.id].forum+"\nNew: "+args);
+                                setTimeout(()=>{message.delete()}, 100);
+                                send(":thumbsup: Your new forum profile will be updated after it is approved by moderators.");
+                            });
+                        };
+                    };
                 };
             };
         break;
@@ -450,23 +534,70 @@ bot.on("message", message => {
                 message.channel.send("```javascript"+n+list.join(n)+"```");
         break;
         case (cmd === "eval" && message.author.id === "176082223894757377"):
-        try {
-        var evaled = eval(args);
-        if (typeof evaled !== "string")
-            evaled = require("util").inspect(evaled);
-            if (evaled.length > 1999) {
-                const hastebin = require('hastebin-gen');
-                hastebin(evaled, "js").then(r => {
-                    message.channel.send(":thinking: Too long.\n"+r);
-                }).catch(console.error);
-            } else if (evaled.length >= 1) {
-                message.channel.send("```javascript\n"+evaled+"```");
-            } else {
-                message.channel.send("No output.");
+            try {
+            var evaled = eval(args);
+            if (typeof evaled !== "string")
+                evaled = require("util").inspect(evaled);
+                if (evaled.length > 1999) {
+                    const hastebin = require('hastebin-gen');
+                    hastebin(evaled, "js").then(r => {
+                        message.channel.send(":thinking: Too long.\n"+r);
+                    }).catch(console.error);
+                } else if (evaled.length >= 1) {
+                    message.channel.send("```javascript\n"+evaled+"```");
+                } else {
+                    message.channel.send("No output.");
+                };
+            } catch (err) {
+                message.channel.send(":warning: **Error**```"+err.toString()+"```");
             };
-        } catch (err) {
-            message.channel.send(":warning: **Error**```"+err.toString()+"```");
+        break;
+        case (cmd === "help"):
+            message.channel.send(new Discord.MessageEmbed().setColor(embedcolor).setDescription("[Command list](https://github.com/Purpzie/dragonbot/wiki/Commands) | [About / FAQ](https://github.com/Purpzie/dragonbot/wiki/About-%5C--FAQ)")
+        .addField("Directory commands", "`!scroll <scroll name>`\nStores your scroll in the directory.\nYou must have a scroll stored to use !forum, !lock, !dragon, and !info.\nUsing a false scroll name on purpose is not allowed.\nIf you are caught doing this you will be blacklisted."
+        +n+n+"`!forum <forum profile URL>`\nStores your forum in the directory.\nSimilar to !scroll, using a false forum profile is not allowed."
+        +n+n+"`!lock <on|off>`\nLock or unlock your information. This prevents other users from viewing your info."
+        +n+n+"`!info <@user>`\nGets a user's information."));
+        break;
+        case (cmd === "block" && isMod(message)):
+            if (message.mentions.users.size != 1) {
+                send(":warning: Invalid user. Please mention someone to block from using the bot.");
+            } else {
+                var person = message.mentions.users.first();
+                blacklist[person.id] = person.username+"#"+person.discriminator;
+                write(blacklist, "./blacklist.json");
+                send(":thumbsup:");
+            };
+        break;
+        case (cmd === "unblock" && isMod(message)):
+        if (message.mentions.users.size != 1) {
+            send(":warning: Invalid user. Please mention someone to unblock.");
+        } else {
+            var person = message.mentions.users.first();
+            delete blacklist[person.id];
+            write(blacklist, "./blacklist.json");
+            send(":thumbsup:");
         };
+        break;
+        case (cmd === "view"):
+            message.channel.send("https://dragcave.net/view/"+args);
+        break;
+        case (cmd === "nview"):
+            message.channel.send("https://dragcave.net/view/n/"+link(args));
+        break;
+        case (cmd === "say" && (isMod(message) || message.author.id === "176082223894757377")):
+            if (args.startsWith("<#")) {
+                var channel = message.mentions.channels.first();
+                var say = args.substring("<#000000000000000000> ".length);
+                channel.send(say);
+                setTimeout(()=>{message.delete()}, 200);
+            } else {
+                setTimeout(()=>{message.delete()}, 200);
+                message.channel.send(args);
+            };
+        break;
+        case (cmd === "ping"):
+            send("Pong!");
         break;
     };
 
