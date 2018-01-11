@@ -599,6 +599,15 @@ bot.on("message", message => {
         case (cmd === "ping"):
             send("Pong!");
         break;
+        case (cmd === "sites"):
+            message.channel.send(new Discord.MessageEmbed().setColor(embedcolor).addField("Click Sites & Hatcheries", "[Allure of Neglected Dragons](http://www.allureofnds.net/daycare)"
+            +n+"[Valley Sherwood](http://valleysherwood.com/)"
+            +n+"[DragHatch](http://dc.evinext.com/)"
+            +n+"[Egg Drop Soup](https://greg-kennedy.com/dragcave/)").addField("Tools", "[DC Wiki](http://dragcave.wikia.com)"));
+        break;
+        case (cmd === "user"):
+            message.channel.send("https://dragcave.net/user/"+link(args));
+        break;
     };
 
 });
