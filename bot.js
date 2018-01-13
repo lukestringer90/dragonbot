@@ -252,6 +252,7 @@ bot.on("messageReactionAdd", (reaction, user) => {
                     write(info, "./info.json");
                     message.guild.members.fetch((request.user)).then(member => {
                         member.addRole(private.roles.verified);
+                        member.user.send("You have been verified! You can now use `!info`.");
                     });
                     ulog(user, "verified "+person.username+"#"+person.discriminator);
             };
@@ -349,6 +350,7 @@ bot.on("message", message => {
                             log(message, "stored new scroll: "+args);
                             setTimeout(()=>{message.delete()}, 100);
                             send(":thumbsup: Successfully stored your info. Now, store your forum profile with `"+config.prefix+"forum` and you will become verified after the moderators approve it. If you do not have a forum profile, contact a mod to become verified.");
+                            author.send("Scroll stored: "+info[author.id].scroll);
                         });
                     } else {
                         if (info[author.id].pending.scroll != null) {
@@ -495,6 +497,7 @@ bot.on("message", message => {
                         dirupdate(author);
                         setTimeout(()=>{message.delete()}, 100);
                         send(":thumbsup: Forum profile stored. Expect to be verified soon.");
+                        author.send("Forum stored: "+info[author.id].forum);
                     } else {
                         if (info[author.id].pending.forum != null) {
                             send("You already have a forum change request pending!");
