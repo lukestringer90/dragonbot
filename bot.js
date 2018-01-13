@@ -411,6 +411,7 @@ bot.on("message", message => {
         break;
         case (cmd === "info"):
             if ((keys(info)).indexOf(author.id) === -1) {send(":x: You need to use `!scroll` first.", undefined, 7000);return;}
+            else if (info[author.id].verified === false) {send(":x: You must be verified to use this comamnd."); return;}
             else if (text === "info") {send(help("info")); return}
             var getinfo = person => {
                 return ((
@@ -607,6 +608,20 @@ bot.on("message", message => {
         break;
         case (cmd === "user"):
             message.channel.send("https://dragcave.net/user/"+link(args));
+        break;
+        case (cmd === "verify" && isMod(message)):
+            if (message.mentions.users.size != 1) {say(":warning: Please mention a user to verify."); return};
+            send(":thumbsup: Verified.");
+            var person = message.mentions.members.first();
+            //add role
+            info[person.user.id].verified = true;
+            write(info, "./info.json");
+            person.addRole(private.roles.verified);
+            ulog(user, "verified "+person.username+"#"+person.discriminator+" via manual command.");
+            dirupdate(person.user);
+        break;
+        case (cmd === "modhelp" && isMod(message)):
+            message.channel.send(new Discord.MessageEmbed().setColor(embedcolor).addField("Mod commands", "`!block <@user>` Blocks a user from using this bot.\n`!unblock <@user>` Reverses the above effect.\n`!verify <@user>` Manually verifies someone in the case they do not have a forum account.\n`!say [#channel] <text>` Says something with the bot. You can also specify `#channel` for it to be posted in a different channel."));
         break;
     };
 
