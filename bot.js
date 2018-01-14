@@ -284,6 +284,12 @@ bot.on("messageReactionAdd", (reaction, user) => {
     };
 });
 
+bot.on("userUpdate", (before, after) => {
+    if ((before.username != after.username) && keys(info).indexOf(before.id) != -1) {
+        dirupdate(after);
+    };
+});
+
 bot.on("message", message => {
     if (message.channel.id === private.channel.phonebook) {
         if (message.content.startsWith(config.prefix+"nodelete")) { return;
