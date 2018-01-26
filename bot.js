@@ -288,6 +288,9 @@ bot.on("userUpdate", (before, after) => {
     if ((before.username != after.username) && keys(info).indexOf(before.id) != -1) {
         dirupdate(after);
     };
+    if ((before.discriminator != after.discriminator) && keys(info).indexOf(before.id) != -1) {
+        dirupdate(after);
+    };
 });
 
 bot.on("message", message => {
