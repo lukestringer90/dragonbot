@@ -252,6 +252,7 @@ bot.on("messageReactionAdd", (reaction, user) => {
                     write(info, "./info.json");
                     message.guild.members.fetch((request.user)).then(member => {
                         member.addRole(private.roles.verified);
+                        member.user.send("You have been verified! You can now use `!info`.");
                     });
                     ulog(user, "verified "+person.username+"#"+person.discriminator);
             };
@@ -280,6 +281,15 @@ bot.on("messageReactionAdd", (reaction, user) => {
         };
         delete requests[message.id];
         write(requests, "./requests.json");
+    };
+});
+
+bot.on("userUpdate", (before, after) => {
+    if ((before.username != after.username) && keys(info).indexOf(before.id) != -1) {
+        dirupdate(after);
+    };
+    if ((before.discriminator != after.discriminator) && keys(info).indexOf(before.id) != -1) {
+        dirupdate(after);
     };
 });
 
@@ -349,6 +359,7 @@ bot.on("message", message => {
                             log(message, "stored new scroll: "+args);
                             setTimeout(()=>{message.delete()}, 100);
                             send(":thumbsup: Successfully stored your info. Now, store your forum profile with `"+config.prefix+"forum` and you will become verified after the moderators approve it. If you do not have a forum profile, contact a mod to become verified.");
+                            author.send("Scroll stored: "+info[author.id].scroll);
                         });
                     } else {
                         if (info[author.id].pending.scroll != null) {
@@ -411,6 +422,7 @@ bot.on("message", message => {
         break;
         case (cmd === "info"):
             if ((keys(info)).indexOf(author.id) === -1) {send(":x: You need to use `!scroll` first.", undefined, 7000);return;}
+            else if (info[author.id].verified === false) {send(":x: You must be verified to use this comamnd."); return;}
             else if (text === "info") {send(help("info")); return}
             var getinfo = person => {
                 return ((
@@ -494,6 +506,7 @@ bot.on("message", message => {
                         dirupdate(author);
                         setTimeout(()=>{message.delete()}, 100);
                         send(":thumbsup: Forum profile stored. Expect to be verified soon.");
+                        author.send("Forum stored: "+info[author.id].forum);
                     } else {
                         if (info[author.id].pending.forum != null) {
                             send("You already have a forum change request pending!");
@@ -607,6 +620,20 @@ bot.on("message", message => {
         break;
         case (cmd === "user"):
             message.channel.send("https://dragcave.net/user/"+link(args));
+        break;
+        case (cmd === "verify" && isMod(message)):
+            if (message.mentions.users.size != 1) {say(":warning: Please mention a user to verify."); return};
+            send(":thumbsup: Verified.");
+            var person = message.mentions.members.first();
+            //add role
+            info[person.user.id].verified = true;
+            write(info, "./info.json");
+            person.addRole(private.roles.verified);
+            ulog(user, "verified "+person.username+"#"+person.discriminator+" via manual command.");
+            dirupdate(person.user);
+        break;
+        case (cmd === "modhelp" && isMod(message)):
+            message.channel.send(new Discord.MessageEmbed().setColor(embedcolor).addField("Mod commands", "`!block <@user>` Blocks a user from using this bot.\n`!unblock <@user>` Reverses the above effect.\n`!verify <@user>` Manually verifies someone in the case they do not have a forum account.\n`!say [#channel] <text>` Says something with the bot. You can also specify `#channel` for it to be posted in a different channel."));
         break;
     };
 
